@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>課表查詢系統</title>
+    <!-- 使用 Tailwind CSS 進行快速樣式設計 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 針對中文字體的優化 */
+        body {
+            font-family: "Microsoft JhengHei", "Heiti TC", sans-serif;
+            background-color: #f3f4f6;
+        }
+        .btn-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-card:active {
+            transform: scale(0.95);
+        }
+        .btn-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* [優化 2] 按鈕點擊高亮狀態 (Active State) */
+        .btn-class.active {
+            background-color: #2563eb !important; /* blue-600 */
+            color: white !important;
+            border-color: #1d4ed8 !important; /* blue-700 */
+            box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.1);
+        }
+        .btn-teacher.active {
+            background-color: #16a34a !important; /* green-600 */
+            color: white !important;
+            border-color: #15803d !important; /* green-700 */
+            box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.1);
+        }
+
+        /* 去除 number input 的上下箭頭 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        
+        /* 自訂左側滾動條樣式 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="overflow-hidden bg-gray-100">
+
+    <!-- 提示訊息 Toast -->
+    <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl transition-all duration-300 opacity-0 -translate-y-full pointer-events-none z-50 font-bold tracking-wide">
+        提示訊息
+    </div>
+
+    <!-- 主容器 -->
+    <div class="flex flex-col lg:flex-row h-screen w-full">
+        
+        <!-- 左欄 / 上欄：控制選單 -->
+        <aside class="w-full lg:w-[360px] xl:w-[400px] bg-white h-full overflow-y-auto custom-scrollbar border-r border-gray-200 p-6 flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.05)] z-10 flex flex-col gap-6">
+            
+            <!-- 標題區塊 -->
+            <header class="text-center">
+                <h1 class="text-3xl font-bold text-gray-800 mb-4 tracking-wider">課表速查</h1>
+                
+                <div class="flex justify-center items-center gap-2 text-lg text-blue-700 font-medium flex-wrap bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                    <div class="flex items-center px-2 py-1">
+                        <input type="number" id="ui-year" class="w-16 bg-transparent text-center font-bold focus:outline-none border-b-2 border-blue-300 focus:border-blue-600 transition-colors" value="111">
+                        <span class="ml-1 text-gray-600">學年度</span>
+                    </div>
+                    
+                    <span class="text-gray-300">|</span>
+
+                    <div class="flex items-center px-2 py-1">
+                        <span class="text-gray-600">第</span>
+                        <select id="ui-semester" class="mx-1 font-bold bg-transparent focus:outline-none border-b-2 border-blue-300 focus:border-blue-600 transition-colors cursor-pointer appearance-none text-center w-8">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                        </select>
+                        <span class="text-gray-600">學期</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 班級查詢區塊 -->
+            <section>
+                <div class="flex items-center mb-4">
+                    <div class="w-1 h-6 bg-blue-500 rounded-full mr-3"></div>
+                    <h2 class="text-xl font-bold text-gray-700">班級課表查詢</h2>
+                </div>
+                <!-- [優化 5] Touch UI：減少列數讓按鈕變寬 -->
+                <div id="class-grid" class="grid grid-cols-2 lg:grid-cols-2 gap-3">
+                    <!-- JavaScript 動態產生 -->
+                </div>
+            </section>
+
+            <hr class="border-gray-100">
+
+            <!-- 教師查詢區塊 -->
+            <section>
+                <div class="flex items-center mb-4">
+                    <div class="w-1 h-6 bg-green-500 rounded-full mr-3"></div>
+                    <h2 class="text-xl font-bold text-gray-700">常用教師查詢</h2>
+                </div>
+                <div id="teacher-grid" class="grid grid-cols-2 lg:grid-cols-2 gap-3">
+                    <!-- JavaScript 動態產生 -->
+                </div>
+            </section>
+
+            <hr class="border-gray-100">
+
+            <!-- 手動搜尋區塊 -->
+            <section class="mb-8">
+                <div class="flex items-center mb-4">
+                    <div class="w-1 h-6 bg-gray-700 rounded-full mr-3"></div>
+                    <h2 class="text-xl font-bold text-gray-700">手動查詢</h2>
+                </div>
+                <form id="manual-search-form" class="flex flex-col gap-3">
+                    <input type="text" id="manual-teacher" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-base placeholder-gray-400" placeholder="請輸入教師姓名或代號...">
+                    
+                    <!-- [優化 3] 搜尋紀錄標籤區塊 -->
+                    <div id="history-container" class="hidden w-full">
+                        <div class="text-xs text-gray-400 mb-2 font-medium">最近搜尋：</div>
+                        <div id="history-tags" class="flex flex-wrap gap-2">
+                            <!-- JS 動態產生標籤 -->
+                        </div>
+                    </div>
+
+                    <button type="submit" class="mt-1 w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-8 rounded-xl transition shadow-md flex justify-center items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        搜尋課表
+                    </button>
+                </form>
+            </section>
+        </aside>
+
+        <!-- 右欄：Iframe 顯示區域 (手機版隱藏) -->
+        <main class="hidden lg:flex flex-1 bg-white h-full relative flex-col">
+            
+            <!-- [優化 4] 清除畫面按鈕 (預設隱藏) -->
+            <button id="clear-btn" onclick="clearIframe()" class="absolute top-4 right-4 bg-white/90 hover:bg-red-50 text-gray-600 hover:text-red-500 font-bold py-2 px-4 rounded-lg shadow-sm border border-gray-200 z-20 flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                清除畫面
+            </button>
+
+            <!-- [優化 1] 載入中動畫 (預設隱藏) -->
+            <div id="loading-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm z-15 hidden transition-opacity duration-300">
+                <div class="animate-spin rounded-full h-14 w-14 border-4 border-blue-100 border-t-blue-600 mb-4"></div>
+                <p class="text-xl font-bold text-gray-700 tracking-widest">載入中...</p>
+                <p class="text-sm text-gray-500 mt-2">正在連線至學校系統</p>
+            </div>
+
+            <!-- 初始佔位畫面 -->
+            <div id="iframe-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 text-gray-400 z-10 transition-opacity duration-300">
+                <div class="bg-white p-6 rounded-full shadow-sm mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-blue-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <p class="text-xl font-medium text-gray-500">請在左側選擇要查詢的課表</p>
+                <p class="text-sm mt-2 text-gray-400">查詢結果將會顯示在此處</p>
+            </div>
+
+            <!-- 網頁內嵌框架 (移除行內的 onload 屬性，改用 JS 綁定) -->
+            <iframe name="result-frame" id="result-frame" class="w-full h-full border-none bg-white" src="about:blank"></iframe>
+        </main>
+    </div>
+
+    <!-- 隱藏表單 -->
+    <form id="hidden-class-form" method="post" action="https://web.sys.scu.edu.tw/class42.asp" target="result-frame" style="display:none;">
+        <input type="hidden" name="clsid1" value="1學士班">
+        <input type="hidden" name="clsid02" value="5454國際經營與貿易學系">
+        <input type="hidden" name="clsid34" id="form-clsid34">
+        <input type="hidden" name="syear" class="input-syear">
+        <input type="hidden" name="smester" class="input-smester">
+    </form>
+    <form id="hidden-teacher-form" method="post" action="https://web.sys.scu.edu.tw/class52.asp" target="result-frame" style="display:none;">
+        <input type="hidden" name="teachname" id="form-teachname">
+        <input type="hidden" name="syear" class="input-syear">
+        <input type="hidden" name="smester" class="input-smester">
+    </form>
+
+    <script>
+        // --- 0. 提示訊息處理 ---
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.remove('opacity-0', '-translate-y-full');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', '-translate-y-full');
+            }, 3000);
+        }
+
+        // --- 優化 1 & 4：狀態切換與清除邏輯 ---
+        function prepareIframe() {
+            const placeholder = document.getElementById('iframe-placeholder');
+            if(placeholder) {
+                placeholder.style.opacity = '0';
+                setTimeout(() => { placeholder.style.display = 'none'; }, 300);
+            }
+            
+            // 顯示清除按鈕
+            const clearBtn = document.getElementById('clear-btn');
+            if(clearBtn) {
+                clearBtn.classList.remove('opacity-0', 'pointer-events-none');
+                clearBtn.classList.add('opacity-100', 'pointer-events-auto');
+            }
+        }
+
+        function clearIframe() {
+            document.getElementById('result-frame').src = 'about:blank';
+            
+            // 恢復佔位圖案
+            const placeholder = document.getElementById('iframe-placeholder');
+            placeholder.style.display = 'flex';
+            setTimeout(() => { placeholder.style.opacity = '1'; }, 10);
+            
+            // 隱藏清除按鈕
+            const clearBtn = document.getElementById('clear-btn');
+            clearBtn.classList.remove('opacity-100', 'pointer-events-auto');
+            clearBtn.classList.add('opacity-0', 'pointer-events-none');
+            
+            clearActiveState(); // 清除所有按鈕點擊狀態
+        }
+
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        // 監聽 iframe 的載入完成事件，隱藏 Loading 動畫
+        document.getElementById('result-frame').addEventListener('load', hideLoading);
+
+        // --- 優化 2：按鈕點擊高亮邏輯 ---
+        function clearActiveState() {
+            document.querySelectorAll('.btn-card').forEach(btn => {
+                btn.classList.remove('active');
+            });
+        }
+        function setActive(btnElement) {
+            clearActiveState();
+            if(btnElement) btnElement.classList.add('active');
+        }
+
+        // --- 優化 3：雙重儲存搜尋歷史紀錄 (LocalStorage + Cookie 備援) ---
+        const HISTORY_KEY = 'scu_schedule_history';
+
+        // 安全獲取紀錄 (先找 LocalStorage，若被清空則找 Cookie)
+        function getSafeHistory() {
+            let history = [];
+            try {
+                const ls = localStorage.getItem(HISTORY_KEY);
+                if (ls) return JSON.parse(ls);
+            } catch (e) { console.warn("LocalStorage 讀取受限"); }
+
+            try {
+                const match = document.cookie.match(new RegExp('(^| )' + HISTORY_KEY + '=([^;]+)'));
+                if (match) return JSON.parse(decodeURIComponent(match[2]));
+            } catch (e) { console.warn("Cookie 讀取受限"); }
+
+            return history;
+        }
+
+        // 安全儲存紀錄 (同時存入 LocalStorage 與跨域 Cookie)
+        function setSafeHistory(history) {
+            const val = JSON.stringify(history);
+            try {
+                localStorage.setItem(HISTORY_KEY, val);
+            } catch (e) { console.warn("LocalStorage 寫入受限"); }
+            
+            try {
+                // 設定 365 天過期，並加上 SameSite=None; Secure 提升在 iframe 中的存活率
+                const d = new Date();
+                d.setTime(d.getTime() + (365 * 24 * 60 * 60 * 1000));
+                document.cookie = HISTORY_KEY + "=" + encodeURIComponent(val) + ";expires=" + d.toUTCString() + ";path=/;SameSite=None;Secure";
+            } catch (e) { console.warn("Cookie 寫入受限"); }
+        }
+
+        function loadHistory() {
+            const history = getSafeHistory();
+            const container = document.getElementById('history-container');
+            const tagsDiv = document.getElementById('history-tags');
+            
+            if(history.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+            
+            container.classList.remove('hidden');
+            tagsDiv.innerHTML = '';
+            
+            history.forEach(term => {
+                const tag = document.createElement('button');
+                tag.type = 'button';
+                tag.className = 'bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm py-1 px-3 rounded-full transition-colors font-medium';
+                tag.textContent = term;
+                tag.onclick = () => {
+                    document.getElementById('manual-teacher').value = term;
+                    submitTeacher(term, null); // 使用紀錄查詢不標記特定按鈕
+                };
+                tagsDiv.appendChild(tag);
+            });
+        }
+
+        function saveHistory(term) {
+            let history = getSafeHistory();
+            // 移除重複並加到最前面
+            history = history.filter(item => item !== term);
+            history.unshift(term);
+            // 最多保留 5 筆
+            if(history.length > 5) history.pop();
+            setSafeHistory(history);
+            loadHistory();
+        }
+
+        // --- 核心資料設定 ---
+        const classes = [
+            { name: "貿一Ａ", id: "515411貿一Ａ　" }, { name: "貿一Ｂ", id: "515412貿一Ｂ　" },
+            { name: "貿二Ａ", id: "515421貿二Ａ　" }, { name: "貿二Ｂ", id: "515422貿二Ｂ　" },
+            { name: "貿三Ａ", id: "515431貿三Ａ　" }, { name: "貿三Ｂ", id: "515432貿三Ｂ　" },
+            { name: "貿四Ａ", id: "515441貿四Ａ　" }, { name: "貿四Ｂ", id: "515442貿四Ｂ　" },
+            { name: "貿碩一", id: "535410貿碩一" },   { name: "貿碩二", id: "535420貿碩二" },
+            { name: "碩專一", id: "575410貿碩專一" }, { name: "碩專二", id: "575420貿碩專二" }
+        ];
+
+        const teachers = [
+            { name: "黃寶玉", value: "黃寶玉" }, { name: "張南薰", value: "張南薰" },
+            { name: "陳金盛", value: "陳金盛" }, { name: "梁　恕", value: "梁恕" },
+            { name: "謝效昭", value: "謝效昭" }, { name: "陳宏易", value: "陳宏易" },
+            { name: "張大成", value: "張大成" }, { name: "温福星", value: "91000128" },
+            { name: "吳宜臻", value: "吳宜臻" }, { name: "顧萱萱", value: "顧萱萱" },
+            { name: "張瀞文", value: "09000186" }, { name: "洪立文", value: "10051163" },
+            { name: "張淑珍", value: "張淑珍" }, { name: "楊俊明", value: "楊俊明" },
+            { name: "蔡俽瑜", value: "01000029" }, { name: "廖嘉立", value: "廖嘉立" } 
+        ];
+
+        // --- 初始化邏輯 ---
+        const dt = new Date();
+        const year = dt.getFullYear();
+        const month = dt.getMonth() + 1;
+        let defaultYear, defaultSemester;
+
+        if (month >= 8) {
+            defaultYear = year - 1911; defaultSemester = 1;
+        } else if (month === 1) {
+            defaultYear = year - 1911 - 1; defaultSemester = 1;
+        } else {
+            defaultYear = year - 1911 - 1; defaultSemester = 2;
+        }
+
+        const uiYearInput = document.getElementById('ui-year');
+        const uiSemesterSelect = document.getElementById('ui-semester');
+        uiYearInput.value = defaultYear;
+        uiSemesterSelect.value = defaultSemester;
+        
+        function updateHiddenForms() {
+            document.querySelectorAll('.input-syear').forEach(el => el.value = uiYearInput.value);
+            document.querySelectorAll('.input-smester').forEach(el => el.value = uiSemesterSelect.value);
+        }
+
+        uiYearInput.addEventListener('change', updateHiddenForms);
+        uiYearInput.addEventListener('input', updateHiddenForms);
+        uiSemesterSelect.addEventListener('change', updateHiddenForms);
+        updateHiddenForms();
+        loadHistory(); // 載入歷史紀錄
+
+        // --- 動態生成按鈕 ---
+        // [優化 5] Touch UI 提升：增加 py-4、text-base md:text-lg 加大觸控範圍與文字
+        const classGrid = document.getElementById('class-grid');
+        classes.forEach(cls => {
+            const btn = document.createElement('button');
+            btn.className = "btn-card btn-class bg-white hover:bg-blue-50 text-blue-700 font-bold py-4 px-2 rounded-xl shadow-sm border border-blue-100 flex justify-center items-center text-base md:text-lg tracking-wide";
+            btn.textContent = cls.name;
+            btn.onclick = (e) => submitClass(cls.id, e.currentTarget);
+            classGrid.appendChild(btn);
+        });
+
+        const teacherGrid = document.getElementById('teacher-grid');
+        teachers.forEach(tea => {
+            const btn = document.createElement('button');
+            btn.className = "btn-card btn-teacher bg-white hover:bg-green-50 text-green-700 font-bold py-4 px-2 rounded-xl shadow-sm border border-green-100 flex justify-center items-center text-base md:text-lg tracking-wide";
+            btn.textContent = tea.name;
+            btn.onclick = (e) => submitTeacher(tea.value, e.currentTarget);
+            teacherGrid.appendChild(btn);
+        });
+
+        // --- 提交與執行邏輯 ---
+        function submitClass(clsId, btnElement) {
+            setActive(btnElement);
+            updateHiddenForms();
+            const form = document.getElementById('hidden-class-form');
+            document.getElementById('form-clsid34').value = clsId;
+            executeSubmit(form);
+        }
+
+        function submitTeacher(teaValue, btnElement) {
+            setActive(btnElement);
+            updateHiddenForms();
+            const form = document.getElementById('hidden-teacher-form');
+            document.getElementById('form-teachname').value = teaValue;
+            executeSubmit(form);
+        }
+
+        function executeSubmit(form) {
+            if (window.innerWidth >= 1024) {
+                // 電腦版：在 iframe 顯示並觸發 Loading
+                form.target = "result-frame";
+                prepareIframe();
+                showLoading(); // 開始轉圈圈，等 iframe 的 onload 觸發 hideLoading()
+            } else {
+                // 手機版：開新分頁
+                form.target = "_blank";
+                showToast("已在新分頁開啟課表");
+            }
+            form.submit();
+        }
+
+        // --- 手動搜尋處理 ---
+        document.getElementById('manual-search-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const val = document.getElementById('manual-teacher').value.trim();
+            if(val !== "") {
+                submitTeacher(val, null); // 手動搜尋清除按鈕高亮狀態
+                saveHistory(val);         // 儲存搜尋紀錄
+            } else {
+                showToast("請輸入教師姓名或代號");
+            }
+        });
+
+    </script>
+</body>
+</html>

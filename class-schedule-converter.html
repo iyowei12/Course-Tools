@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>東吳大學課表產生器 (Web)</title>
+    
+    <!-- 引入 ExcelJS (匯出 Excel) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <!-- 引入 html2canvas 和 jsPDF (匯出 PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #dddddd;
+            --header-bg: #f5f5f5;
+            --header-text: #333333;
+            --accent-color: #2c3e50; /* 預設顏色 */
+            --hover-bg: #e8f0fe;
+            --card-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            --print-font: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+        }
+
+        /* 深色模式變數 */
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --border-color: #444444;
+            --header-bg: #2d2d2d;
+            --header-text: #ffffff;
+            --accent-color: #64b5f6;
+            --hover-bg: #333333;
+            --card-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: var(--print-font);
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* 控制面板 */
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--header-bg);
+            border-radius: 8px;
+            align-items: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .paste-area {
+            flex: 1;
+            min-width: 250px;
+            padding: 15px;
+            border: 2px dashed var(--accent-color);
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .paste-area:hover, .paste-area:focus {
+            background-color: var(--hover-bg);
+            outline: none;
+            border-style: solid;
+        }
+
+        .paste-area.active {
+            background-color: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+
+        .btn-clear { background-color: #dc3545; color: white; }
+        .btn-pdf { background-color: #007bff; color: white; }
+        .btn-theme { background-color: #6c757d; color: white; }
+        .btn-excel { background-color: #217346; color: white; } /* Excel 綠色 */
+        
+        .btn:hover { opacity: 0.9; }
+
+        /* 自訂模態對話框樣式 (取代原生 confirm/alert) */
+        .modal-overlay {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* 半透明黑底 */
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-box {
+            background: var(--bg-color);
+            color: var(--text-color);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+            min-width: 280px;
+            max-width: 80%;
+            border: 1px solid var(--border-color);
+            animation: popIn 0.2s ease-out;
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        /* 隱藏的 Input 用來觸發貼上 */
+        #hiddenInput {
+            position: absolute;
+            opacity: 0;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        /* 課表主體 */
+        .schedule-container {
+            width: 100%;
+            overflow-x: auto;
+            background: #fff; /* 確保截圖時背景是白的 */
+        }
+        
+        [data-theme="dark"] .schedule-container {
+             background: #1a1a1a;
+        }
+
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px; /* 確保在手機上可滑動 */
+            table-layout: fixed; /* 固定佈局，讓欄寬平均分配 */
+        }
+
+        .schedule-table th, .schedule-table td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: center;
+            vertical-align: middle;
+            word-wrap: break-word; /* 防止長文字撐開 */
+        }
+
+        /* 拖曳時的目標格子樣式 */
+        .schedule-table td.drag-over {
+            background-color: #fff9c4 !important; /* 淺黃色 */
+            border: 2px dashed #fbc02d;
+        }
+        [data-theme="dark"] .schedule-table td.drag-over {
+            background-color: #4a4a35 !important;
+            border-color: #fbc02d;
+        }
+
+        .schedule-table th {
+            background-color: var(--header-bg);
+            color: var(--header-text);
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        /* 節次欄位寬度 */
+        .col-period { width: 40px; } 
+        /* 其餘欄位自動平均分配 */
+
+        /* 課程卡片樣式 - 更新佈局 */
+        .course-card {
+            background-color: var(--bg-color);
+            border-left: 4px solid var(--accent-color); /* 顏色會由 JS 動態覆蓋 */
+            padding: 6px;
+            padding-right: 18px; /* 預留空間給刪除按鈕 */
+            margin: 2px 0;
+            text-align: left;
+            font-size: 13px;
+            box-shadow: var(--card-shadow);
+            border-radius: 0 4px 4px 0;
+            position: relative;
+            transition: transform 0.1s;
+            cursor: grab; /* 鼠標顯示為可抓取 */
+            user-select: none; /* 防止選取文字 */
+        }
+        
+        .course-card:hover {
+            z-index: 10;
+            transform: scale(1.02);
+        }
+
+        .course-card:active {
+            cursor: grabbing; /* 抓取中 */
+            opacity: 0.6;
+        }
+
+        /* 刪除按鈕樣式 */
+        .delete-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            line-height: 14px;
+            text-align: center;
+            color: #999;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 50%;
+            display: none; 
+            z-index: 20;
+        }
+
+        .delete-btn:hover {
+            background-color: #ffcccc;
+            color: #cc0000;
+        }
+
+        .course-card:hover .delete-btn {
+            display: block;
+        }
+
+        /* 第一行：課名 + 標籤 */
+        .course-line-1 {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 3px;
+            line-height: 1.3;
+            pointer-events: none; /* 防止拖曳時觸發內部元素的事件 */
+        }
+
+        .course-name {
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+
+        /* 第二行：老師 + 教室 */
+        .course-line-2 {
+            font-size: 12px;
+            opacity: 0.9;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px; /* 老師和教室之間的間距 */
+            pointer-events: none;
+        }
+        
+        /* 標籤樣式 (組別、單雙週、班級) */
+        .tag {
+            display: inline-block;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-right: 3px;
+            font-weight: normal;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        
+        /* 預設樣式，實際顏色會由 JS 覆蓋 */
+        .tag-group { border: 1px solid transparent; }
+        .tag-week { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+        .tag-class { background-color: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+        
+        [data-theme="dark"] .tag-week { background-color: #c62828; color: #ffebee; border-color: #b71c1c; }
+        [data-theme="dark"] .tag-class { background-color: #1565c0; color: #e3f2fd; border-color: #0d47a1; }
+
+        .empty-slot { color: #ccc; font-size: 12px; }
+
+        /* RWD: 手機優化 */
+        @media (max-width: 768px) {
+            .controls { flex-direction: column; align-items: stretch; }
+            .course-name { font-size: 13px; }
+            .course-line-2 { font-size: 11px; }
+            .schedule-table { table-layout: auto; } 
+            .delete-btn { display: block; opacity: 0.6; }
+            /* 手機上可能不好拖曳，保持可見 */
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <div class="paste-area" id="pasteArea">
+        <span id="pasteText">📋 點擊此處，然後按 Ctrl+V 貼上班級課表或教師課表</span>
+        <input type="text" id="hiddenInput" autocomplete="off">
+    </div>
+    <button class="btn btn-clear" onclick="clearData()">🗑️ 清除所有</button>
+    <button class="btn btn-theme" onclick="toggleTheme()">🌗 深色/淺色</button>
+    <button class="btn btn-pdf" onclick="generatePDF()">📥 下載 PDF</button>
+    <button class="btn btn-excel" onclick="exportToExcel()">📊 匯出 Excel</button>
+</div>
+
+<div class="schedule-container" id="scheduleContainer">
+    <table class="schedule-table" id="scheduleGrid">
+        <!-- 內容由 JavaScript 生成 -->
+    </table>
+</div>
+
+<!-- 自訂模態對話框 (解決 Google Sites 封鎖 alert/confirm 的問題) -->
+<div id="customModal" class="modal-overlay">
+    <div class="modal-box">
+        <p id="modalMessage">提示訊息</p>
+        <div class="modal-buttons">
+            <button class="btn btn-theme" id="modalCancelBtn" onclick="closeModal()">取消</button>
+            <button class="btn btn-clear" id="modalConfirmBtn" onclick="onModalConfirm()">確定</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 1. 初始化資料結構 ---
+    let courses = []; 
+
+    // 完整節次定義 (包含夜間)
+    const allPeriods = [
+        { id: '1', label: '1' }, { id: '2', label: '2' },
+        { id: '3', label: '3' }, { id: '4', label: '4' },
+        { id: 'E', label: 'E' },
+        { id: '5', label: '5' }, { id: '6', label: '6' },
+        { id: '7', label: '7' }, { id: '8', label: '8' },
+        { id: '9', label: '9' },
+        { id: 'A', label: '10 (A)' }, { id: 'B', label: '11 (B)' },
+        { id: 'C', label: '12 (C)' }, { id: 'D', label: '13 (D)' }
+    ];
+
+    // 完整星期定義 (包含日)
+    const allDays = ['一', '二', '三', '四', '五', '六', '日'];
+
+    // 擴充的預定義顏色庫 (20色，確保不撞色)
+    const colorPalette = [
+        '#D32F2F', // 紅
+        '#1976D2', // 藍
+        '#388E3C', // 綠
+        '#F57C00', // 橘
+        '#7B1FA2', // 紫
+        '#0097A7', // 青
+        '#C2185B', // 桃紅
+        '#5D4037', // 褐
+        '#455A64', // 灰藍
+        '#AFB42B', // 萊姆綠
+        '#E64A19', // 深橘
+        '#512DA8', // 深紫
+        '#00796B', // 藍綠
+        '#FBC02D', // 黃
+        '#303F9F', // 靛青
+        '#0288D1', // 亮藍
+        '#689F38', // 亮綠
+        '#616161', // 灰
+        '#8D6E63', // 淺褐
+        '#FFA000'  // 琥珀
+    ];
+
+    // 顏色狀態管理
+    let subjectColorMap = {}; // 記錄 科目 -> 顏色
+    let groupColorMap = {};   // 記錄 組別 -> 顏色
+    let subjectColorIndex = 0; // 下一個可用顏色的索引
+    let groupColorIndex = 0;
+
+    // --- 安全性強化：HTML 跳脫函式 ---
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // --- 自訂模態對話框邏輯 (取代 confirm/alert) ---
+    let confirmCallback = null;
+
+    function showModal(message, isConfirm = false, callback = null) {
+        document.getElementById('modalMessage').innerText = message;
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const cancelBtn = document.getElementById('modalCancelBtn');
+        
+        if (isConfirm) {
+            // 確認模式 (類似 confirm)
+            cancelBtn.style.display = 'inline-block';
+            confirmBtn.innerText = '確定';
+            confirmBtn.classList.remove('btn-theme'); 
+            confirmBtn.classList.add('btn-clear'); // 紅色
+            confirmCallback = callback;
+        } else {
+            // 提示模式 (類似 alert)
+            cancelBtn.style.display = 'none';
+            confirmBtn.innerText = '關閉';
+            confirmBtn.classList.remove('btn-clear');
+            confirmBtn.classList.add('btn-theme'); // 灰色
+            confirmCallback = null;
+        }
+        
+        document.getElementById('customModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('customModal').style.display = 'none';
+        confirmCallback = null;
+    }
+
+    function onModalConfirm() {
+        if (confirmCallback) confirmCallback();
+        closeModal();
+    }
+
+    // --- 顏色分配 ---
+    function getSubjectColor(subject) {
+        if (!subject) return '#2c3e50';
+        if (!subjectColorMap[subject]) {
+            subjectColorMap[subject] = colorPalette[subjectColorIndex % colorPalette.length];
+            subjectColorIndex++;
+        }
+        return subjectColorMap[subject];
+    }
+
+    function getGroupColor(group) {
+        if (!group) return '#ccc';
+        if (!groupColorMap[group]) {
+            const offsetIndex = (groupColorIndex + 5) % colorPalette.length;
+            groupColorMap[group] = colorPalette[offsetIndex];
+            groupColorIndex++;
+        }
+        return groupColorMap[group];
+    }
+
+    // --- 2. 核心邏輯：解析 HTML ---
+    function parseHTML(htmlString) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlString, 'text/html');
+        const rows = doc.querySelectorAll('tr'); 
+        
+        let newCoursesCount = 0;
+        let prevSubject = '', prevGroup = '', prevRequired = '', prevNote = '', prevTeacher = '', prevCourseClass = '';
+        let detectedFormat = 'unknown';
+
+        rows.forEach((row, index) => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 15) return; 
+
+            const clean = (idx) => cells[idx] ? cells[idx].innerText.replace(/\s+/g, '').trim() : '';
+            
+            // 根據日期的位置來判斷是哪種課表格式
+            const c11 = clean(11);
+            const c12 = clean(12);
+
+            let format = 'unknown';
+            if (['一', '二', '三', '四', '五', '六', '日'].includes(c11) && c11.length === 1) {
+                format = 'class';   // 班級課表
+            } else if (['一', '二', '三', '四', '五', '六', '日'].includes(c12) && c12.length === 1) {
+                format = 'teacher'; // 教師課表
+            }
+
+            if (format === 'unknown') return;
+            detectedFormat = format; // 儲存成功辨識的格式狀態
+
+            let subject, group, required, note, teacher, classroom, dayStr, periodStr, week, courseClass = '';
+
+            if (format === 'class') {
+                subject = clean(3);
+                group = clean(4);
+                required = clean(6);
+                teacher = clean(10);
+                dayStr = clean(11);
+                periodStr = clean(12);
+                week = clean(13);
+                classroom = clean(14);
+                note = clean(15) || '';
+            } else if (format === 'teacher') {
+                subject = clean(5);
+                group = clean(6);
+                required = clean(8);
+                teacher = clean(1);
+                courseClass = clean(2); // 教師課表獨有: 開課班級
+                dayStr = clean(12);
+                periodStr = clean(13);
+                week = clean(14);
+                classroom = clean(15);
+                note = ''; 
+            }
+
+            if (!periodStr || !dayStr) return;
+
+            // 處理跨行合併或同一課程連堂導致特定欄位留白的狀況
+            if (subject) {
+                prevSubject = subject;
+                prevGroup = group;
+                prevRequired = required;
+                prevNote = note;
+                prevTeacher = teacher;
+                prevCourseClass = courseClass;
+            } else {
+                if (prevSubject) {
+                    subject = prevSubject;
+                    group = prevGroup;
+                    required = prevRequired;
+                    note = prevNote;
+                    teacher = teacher || prevTeacher;
+                    courseClass = courseClass || prevCourseClass;
+                } else {
+                    return;
+                }
+            }
+
+            const periodList = periodStr.split('').map(p => p);
+
+            periodList.forEach(p => {
+                const uniqueId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                
+                const courseObj = {
+                    id: uniqueId,
+                    subject,
+                    teacher,
+                    day: dayStr,
+                    period: p,
+                    classroom,
+                    group,
+                    week,
+                    courseClass,
+                    info: `${courseClass} ${group} ${week} ${teacher} ${classroom} ${required} ${note}`.trim()
+                };
+
+                const exists = courses.some(c => 
+                    c.day === courseObj.day && 
+                    c.period === courseObj.period && 
+                    c.subject === courseObj.subject &&
+                    c.teacher === courseObj.teacher &&
+                    c.week === courseObj.week &&
+                    c.courseClass === courseObj.courseClass
+                );
+
+                if (!exists) {
+                    courses.push(courseObj);
+                    newCoursesCount++;
+                }
+            });
+        });
+
+        if (newCoursesCount > 0) {
+            renderSchedule();
+            const formatStr = detectedFormat === 'teacher' ? '教師課表' : '班級課表';
+            flashMessage(`成功載入 ${newCoursesCount} 個課程節次！(${formatStr})`);
+        } else {
+            flashMessage('未偵測到新課程或格式不符，請確認是否複製了完整的表格內容。', true);
+        }
+    }
+
+    // --- 拖曳功能相關變數 ---
+    let draggedCourseId = null;
+
+    // --- 3. 渲染課表 ---
+    function renderSchedule() {
+        const table = document.getElementById('scheduleGrid');
+        table.innerHTML = '';
+
+        // --- 智慧隱藏邏輯 ---
+        // 1. 星期：平日(一~五)必顯，假日(六、日)有課才顯
+        const activeDays = new Set(courses.map(c => c.day));
+        const displayDays = allDays.filter(d => {
+            return ['一', '二', '三', '四', '五'].includes(d) || activeDays.has(d);
+        });
+
+        // 2. 節次：日間(1~9)必顯，夜間(A~D)有課才顯 (逐列檢查)
+        const activePeriods = new Set(courses.map(c => c.period));
+        const displayPeriods = allPeriods.filter(p => {
+            const isNight = ['A', 'B', 'C', 'D'].includes(p.id);
+            return !isNight || activePeriods.has(p.id);
+        });
+
+        // 3.1 建立表頭
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = '<th class="col-period">節次</th>';
+        displayDays.forEach(d => {
+            headerRow.innerHTML += `<th class="col-day">${d}</th>`;
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // 3.2 建立表格內容
+        const tbody = document.createElement('tbody');
+        
+        displayPeriods.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td style="font-weight:bold;">${p.label}</td>`;
+
+            displayDays.forEach(d => {
+                const td = document.createElement('td');
+                // 加入資料屬性與拖曳事件
+                td.dataset.day = d;
+                td.dataset.period = p.id;
+                
+                // 允許放置
+                td.ondragover = handleDragOver;
+                td.ondragleave = handleDragLeave;
+                td.ondrop = handleDrop;
+
+                const matches = courses.filter(c => c.day === d && c.period === p.id);
+
+                if (matches.length > 0) {
+                    matches.forEach(m => {
+                        const div = document.createElement('div');
+                        div.className = 'course-card';
+                        div.draggable = true; // 開啟拖曳
+                        div.ondragstart = (e) => handleDragStart(e, m.id);
+                        
+                        const subjectColor = getSubjectColor(m.subject); 
+                        const groupColor = getGroupColor(m.group);     
+                        
+                        div.style.borderLeftColor = subjectColor;
+
+                        // 產生標籤 HTML (套用 escapeHtml 安全處理)
+                        let tags = '';
+                        // 如果有班級資訊(通常為教師課表匯入)，顯示班級標籤
+                        if (m.courseClass) {
+                            tags += `<span class="tag tag-class">${escapeHtml(m.courseClass)}</span>`;
+                        }
+                        if (m.group) {
+                            const bg = groupColor + '15';
+                            const text = groupColor;
+                            const border = groupColor + '40';
+                            tags += `<span class="tag tag-group" style="background-color:${bg}; color:${text}; border-color:${border};">${escapeHtml(m.group)}</span>`;
+                        }
+                        if (m.week) {
+                            tags += `<span class="tag tag-week">${escapeHtml(m.week)}</span>`;
+                        }
+
+                        // 套用 escapeHtml 安全處理，防止 XSS
+                        div.innerHTML = `
+                            <span class="delete-btn" onclick="removeCourse('${m.id}')" title="刪除此課程">×</span>
+                            
+                            <div class="course-line-1">
+                                <span class="course-name">${escapeHtml(m.subject)}</span>
+                                ${tags}
+                            </div>
+                            
+                            <div class="course-line-2">
+                                <span>${escapeHtml(m.teacher || '')}</span>
+                                <span>${escapeHtml(m.classroom || '')}</span>
+                            </div>
+                        `;
+                        // title 屬性也需要安全處理
+                        div.title = escapeHtml(m.info); 
+                        td.appendChild(div);
+                    });
+                } 
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+    }
+
+    // --- 拖曳事件處理 ---
+    function handleDragStart(e, id) {
+        draggedCourseId = id;
+        e.dataTransfer.effectAllowed = 'move';
+        e.target.style.opacity = '0.4';
+    }
+
+    function handleDragOver(e) {
+        if (e.preventDefault) {
+            e.preventDefault(); 
+        }
+        e.dataTransfer.dropEffect = 'move';
+        
+        const td = e.target.closest('td');
+        if (td && !td.classList.contains('col-period')) { 
+            td.classList.add('drag-over');
+        }
+        return false;
+    }
+
+    function handleDragLeave(e) {
+        const td = e.target.closest('td');
+        if (td) {
+            td.classList.remove('drag-over');
+        }
+    }
+
+    function handleDrop(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+        
+        const td = e.target.closest('td');
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        
+        if (draggedCourseId && td) {
+            const newDay = td.dataset.day;
+            const newPeriod = td.dataset.period;
+
+            if (newDay && newPeriod) {
+                const courseIndex = courses.findIndex(c => c.id === draggedCourseId);
+                if (courseIndex > -1) {
+                    courses[courseIndex].day = newDay;
+                    courses[courseIndex].period = newPeriod;
+                    renderSchedule(); 
+                }
+            }
+        }
+        draggedCourseId = null;
+        return false;
+    }
+
+
+    function removeCourse(id) {
+        if(event) event.stopPropagation(); 
+        courses = courses.filter(c => c.id !== id);
+        renderSchedule();
+    }
+
+    // --- 4. 生成 PDF (取代被 Google Sites 阻擋的 window.print) ---
+    async function generatePDF() {
+        if (courses.length === 0) {
+            showModal("目前沒有課表資料。"); // 改用自訂視窗
+            return;
+        }
+        
+        const element = document.getElementById('scheduleContainer');
+        
+        const deleteBtns = document.querySelectorAll('.delete-btn');
+        deleteBtns.forEach(btn => btn.style.display = 'none');
+        
+        const btn = document.querySelector('.btn-pdf');
+        const originalText = btn.innerText;
+        btn.innerText = "⏳ 產生中...";
+        
+        try {
+            const canvas = await html2canvas(element, {
+                scale: 2, 
+                backgroundColor: window.getComputedStyle(document.body).backgroundColor 
+            });
+            
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            
+            const margin = 10;
+            const finalImgWidth = pdfWidth - (margin * 2);
+            const ratio = finalImgWidth / imgWidth;
+            const finalImgHeight = imgHeight * ratio;
+            
+            pdf.addImage(imgData, 'PNG', margin, margin, finalImgWidth, finalImgHeight);
+            
+            pdf.save("My_Schedule.pdf");
+            
+        } catch (error) {
+            console.error("PDF generation failed:", error);
+            showModal("PDF 產生失敗，請稍後再試。"); // 改用自訂視窗
+        } finally {
+            deleteBtns.forEach(btn => btn.style.display = '');
+            btn.innerText = originalText;
+        }
+    }
+
+    // --- 5. 匯出 Excel (使用 ExcelJS) ---
+    async function exportToExcel() {
+        if (courses.length === 0) {
+            showModal("目前沒有課表資料，無法匯出。"); // 改用自訂視窗
+            return;
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('我的課表', {
+            pageSetup: { 
+                paperSize: 9, 
+                orientation: 'portrait',
+                fitToPage: true,
+                fitToWidth: 1,
+                fitToHeight: 0,
+                margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }
+            }
+        });
+
+        // 智慧隱藏邏輯 (匯出時也要套用)
+        const activeDays = new Set(courses.map(c => c.day));
+        const displayDays = allDays.filter(d => {
+            return ['一', '二', '三', '四', '五'].includes(d) || activeDays.has(d);
+        });
+
+        const activePeriods = new Set(courses.map(c => c.period));
+        const displayPeriods = allPeriods.filter(p => {
+            const isNight = ['A', 'B', 'C', 'D'].includes(p.id);
+            return !isNight || activePeriods.has(p.id);
+        });
+
+        // 設定欄位
+        const columns = [
+            { header: '節次', key: 'period', width: 8 },
+            ...displayDays.map(d => ({ header: d, key: d, width: 22 }))
+        ];
+        worksheet.columns = columns;
+
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { name: '微軟正黑體', bold: true, size: 14 };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.height = 30;
+        
+        headerRow.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+        });
+
+        displayPeriods.forEach(p => {
+            const rowValues = { period: p.label };
+            const newRow = worksheet.addRow(rowValues);
+            newRow.height = 140; 
+
+            const periodCell = newRow.getCell(1);
+            periodCell.font = { name: '微軟正黑體', bold: true, size: 12 };
+            periodCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            periodCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+
+            displayDays.forEach((d, index) => {
+                const cellIndex = index + 2; 
+                const cell = newRow.getCell(cellIndex);
+                
+                const matches = courses.filter(c => c.day === d && c.period === p.id);
+                
+                if (matches.length > 0) {
+                    const contentParts = matches.map(m => {
+                        let line1 = m.subject;
+                        if(m.courseClass) line1 += ` [${m.courseClass}]`; // Excel 同步顯示班級
+                        if(m.group) line1 += ` (${m.group})`;
+                        if(m.week) line1 += ` (${m.week})`;
+                        const line2 = `${m.teacher || ''} ${m.classroom || ''}`;
+                        return `${line1}\n${line2}`;
+                    });
+                    
+                    cell.value = contentParts.join('\n\n'); 
+                    
+                    const colorHex = getSubjectColor(matches[0].subject).replace('#', '');
+                    cell.font = { name: '微軟正黑體', size: 11, color: { argb: 'FF' + colorHex }, bold: true };
+                }
+                
+                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            });
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), "My_Schedule_Formatted.xlsx");
+    }
+
+    document.addEventListener('paste', (e) => {
+        const pasteArea = document.getElementById('pasteArea');
+        pasteArea.classList.add('active');
+        setTimeout(() => pasteArea.classList.remove('active'), 200);
+
+        const text = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
+        if (text) {
+            e.preventDefault();
+            parseHTML(text);
+        }
+    });
+
+    document.getElementById('pasteArea').addEventListener('click', () => {
+        document.getElementById('hiddenInput').focus();
+    });
+
+    // --- 修改後的清除功能 (呼叫自訂視窗) ---
+    function clearData() {
+        showModal('確定要清除所有課表資料嗎？', true, () => {
+            courses = [];
+            // 重置顏色狀態
+            subjectColorMap = {};
+            groupColorMap = {};
+            subjectColorIndex = 0;
+            groupColorIndex = 0;
+            
+            renderSchedule();
+            flashMessage('資料已清除');
+        });
+    }
+
+    function toggleTheme() {
+        const body = document.body;
+        const current = body.getAttribute('data-theme');
+        if (current === 'dark') {
+            body.setAttribute('data-theme', 'light');
+        } else {
+            body.setAttribute('data-theme', 'dark');
+        }
+    }
+
+    function flashMessage(msg, isError = false) {
+        const span = document.getElementById('pasteText');
+        span.innerText = msg;
+        span.style.color = isError ? 'red' : 'green';
+        setTimeout(() => {
+            span.innerText = "📋 點擊此處，然後按 Ctrl+V 貼上班級課表或教師課表";
+            span.style.color = '';
+        }, 3000);
+    }
+
+    renderSchedule();
+
+</script>
+
+</body>
+</html>
