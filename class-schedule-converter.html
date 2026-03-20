@@ -49,6 +49,7 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             transition: background-color 0.3s, color 0.3s;
+            overflow-y: hidden; /* 防止整個網頁出現雙重滾動條 */
         }
 
         /* 控制面板 */
@@ -56,7 +57,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             padding: 15px;
             background: var(--header-bg);
             border-radius: 8px;
@@ -103,19 +104,19 @@
         .btn-clear { background-color: #dc3545; color: white; }
         .btn-pdf { background-color: #007bff; color: white; }
         .btn-theme { background-color: #6c757d; color: white; }
-        .btn-excel { background-color: #217346; color: white; } /* Excel 綠色 */
+        .btn-excel { background-color: #217346; color: white; }
         
         .btn:hover { opacity: 0.9; }
 
-        /* 自訂模態對話框樣式 (取代原生 confirm/alert) */
+        /* 自訂模態對話框樣式 */
         .modal-overlay {
-            display: none; /* 預設隱藏 */
+            display: none; 
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5); /* 半透明黑底 */
+            background: rgba(0, 0, 0, 0.5); 
             z-index: 9999;
             justify-content: center;
             align-items: center;
@@ -147,7 +148,6 @@
             gap: 15px;
         }
 
-        /* 隱藏的 Input 用來觸發貼上 */
         #hiddenInput {
             position: absolute;
             opacity: 0;
@@ -158,11 +158,14 @@
             cursor: pointer;
         }
 
-        /* 課表主體 */
+        /* 課表主體容器 - 修改為支援內部滾動以實現凍結窗格 */
         .schedule-container {
             width: 100%;
-            overflow-x: auto;
-            background: #fff; /* 確保截圖時背景是白的 */
+            max-height: calc(100vh - 125px); /* 限制高度，超出則產生內部滾動條 */
+            overflow: auto; /* 允許水平與垂直滾動 */
+            background: #fff; 
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
         }
         
         [data-theme="dark"] .schedule-container {
@@ -172,8 +175,8 @@
         .schedule-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 800px; /* 確保在手機上可滑動 */
-            table-layout: fixed; /* 固定佈局，讓欄寬平均分配 */
+            min-width: 800px; 
+            table-layout: fixed; 
         }
 
         .schedule-table th, .schedule-table td {
@@ -181,12 +184,33 @@
             padding: 8px;
             text-align: center;
             vertical-align: middle;
-            word-wrap: break-word; /* 防止長文字撐開 */
+            word-wrap: break-word; 
         }
 
-        /* 拖曳時的目標格子樣式 */
+        /* --- 凍結第一列 (類似 Excel) 的核心 CSS --- */
+        .schedule-table th {
+            background-color: var(--header-bg);
+            color: var(--header-text);
+            font-weight: bold;
+            white-space: nowrap;
+            position: sticky; /* 啟用凍結效果 */
+            top: 0;           /* 固定在頂部 */
+            z-index: 50;      /* 確保層級高於課程卡片 */
+            box-shadow: 0 2px 3px rgba(0,0,0,0.1); /* 添加一點陰影讓邊界更清晰 */
+        }
+        /* 若要連「第一欄(節次)」也凍結，可取消下方註解：
+        .schedule-table th:first-child, .schedule-table td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 40;
+            background-color: var(--bg-color);
+        }
+        .schedule-table th:first-child { z-index: 60; background-color: var(--header-bg); }
+        */
+        /* ------------------------------------------- */
+
         .schedule-table td.drag-over {
-            background-color: #fff9c4 !important; /* 淺黃色 */
+            background-color: #fff9c4 !important; 
             border: 2px dashed #fbc02d;
         }
         [data-theme="dark"] .schedule-table td.drag-over {
@@ -194,23 +218,13 @@
             border-color: #fbc02d;
         }
 
-        .schedule-table th {
-            background-color: var(--header-bg);
-            color: var(--header-text);
-            font-weight: bold;
-            white-space: nowrap;
-        }
-
-        /* 節次欄位寬度 */
         .col-period { width: 40px; } 
-        /* 其餘欄位自動平均分配 */
 
-        /* 課程卡片樣式 - 更新佈局 */
         .course-card {
             background-color: var(--bg-color);
-            border-left: 4px solid var(--accent-color); /* 顏色會由 JS 動態覆蓋 */
+            border-left: 4px solid var(--accent-color); 
             padding: 6px;
-            padding-right: 18px; /* 預留空間給刪除按鈕 */
+            padding-right: 18px; 
             margin: 2px 0;
             text-align: left;
             font-size: 13px;
@@ -218,21 +232,21 @@
             border-radius: 0 4px 4px 0;
             position: relative;
             transition: transform 0.1s;
-            cursor: grab; /* 鼠標顯示為可抓取 */
-            user-select: none; /* 防止選取文字 */
+            cursor: grab; 
+            user-select: none; 
+            z-index: 10;
         }
         
         .course-card:hover {
-            z-index: 10;
+            z-index: 20;
             transform: scale(1.02);
         }
 
         .course-card:active {
-            cursor: grabbing; /* 抓取中 */
+            cursor: grabbing; 
             opacity: 0.6;
         }
 
-        /* 刪除按鈕樣式 */
         .delete-btn {
             position: absolute;
             top: 2px;
@@ -247,7 +261,7 @@
             cursor: pointer;
             border-radius: 50%;
             display: none; 
-            z-index: 20;
+            z-index: 30;
         }
 
         .delete-btn:hover {
@@ -259,14 +273,13 @@
             display: block;
         }
 
-        /* 第一行：課名 + 標籤 */
         .course-line-1 {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             margin-bottom: 3px;
             line-height: 1.3;
-            pointer-events: none; /* 防止拖曳時觸發內部元素的事件 */
+            pointer-events: none; 
         }
 
         .course-name {
@@ -275,17 +288,15 @@
             margin-right: 5px;
         }
 
-        /* 第二行：老師 + 教室 */
         .course-line-2 {
             font-size: 12px;
             opacity: 0.9;
             display: flex;
             flex-wrap: wrap;
-            gap: 8px; /* 老師和教室之間的間距 */
+            gap: 8px; 
             pointer-events: none;
         }
         
-        /* 標籤樣式 (組別、單雙週、班級) */
         .tag {
             display: inline-block;
             padding: 1px 4px;
@@ -297,7 +308,6 @@
             white-space: nowrap;
         }
         
-        /* 預設樣式，實際顏色會由 JS 覆蓋 */
         .tag-group { border: 1px solid transparent; }
         .tag-week { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
         .tag-class { background-color: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
@@ -307,14 +317,14 @@
 
         .empty-slot { color: #ccc; font-size: 12px; }
 
-        /* RWD: 手機優化 */
         @media (max-width: 768px) {
+            body { overflow-y: auto; } /* 手機版恢復全網頁滾動 */
             .controls { flex-direction: column; align-items: stretch; }
             .course-name { font-size: 13px; }
             .course-line-2 { font-size: 11px; }
             .schedule-table { table-layout: auto; } 
             .delete-btn { display: block; opacity: 0.6; }
-            /* 手機上可能不好拖曳，保持可見 */
+            .schedule-container { max-height: 60vh; }
         }
     </style>
 </head>
@@ -337,7 +347,6 @@
     </table>
 </div>
 
-<!-- 自訂模態對話框 (解決 Google Sites 封鎖 alert/confirm 的問題) -->
 <div id="customModal" class="modal-overlay">
     <div class="modal-box">
         <p id="modalMessage">提示訊息</p>
@@ -352,7 +361,6 @@
     // --- 1. 初始化資料結構 ---
     let courses = []; 
 
-    // 完整節次定義 (包含夜間)
     const allPeriods = [
         { id: '1', label: '1' }, { id: '2', label: '2' },
         { id: '3', label: '3' }, { id: '4', label: '4' },
@@ -364,40 +372,20 @@
         { id: 'C', label: '12 (C)' }, { id: 'D', label: '13 (D)' }
     ];
 
-    // 完整星期定義 (包含日)
     const allDays = ['一', '二', '三', '四', '五', '六', '日'];
 
-    // 擴充的預定義顏色庫 (20色，確保不撞色)
     const colorPalette = [
-        '#D32F2F', // 紅
-        '#1976D2', // 藍
-        '#388E3C', // 綠
-        '#F57C00', // 橘
-        '#7B1FA2', // 紫
-        '#0097A7', // 青
-        '#C2185B', // 桃紅
-        '#5D4037', // 褐
-        '#455A64', // 灰藍
-        '#AFB42B', // 萊姆綠
-        '#E64A19', // 深橘
-        '#512DA8', // 深紫
-        '#00796B', // 藍綠
-        '#FBC02D', // 黃
-        '#303F9F', // 靛青
-        '#0288D1', // 亮藍
-        '#689F38', // 亮綠
-        '#616161', // 灰
-        '#8D6E63', // 淺褐
-        '#FFA000'  // 琥珀
+        '#D32F2F', '#1976D2', '#388E3C', '#F57C00', '#7B1FA2',
+        '#0097A7', '#C2185B', '#5D4037', '#455A64', '#AFB42B',
+        '#E64A19', '#512DA8', '#00796B', '#FBC02D', '#303F9F',
+        '#0288D1', '#689F38', '#616161', '#8D6E63', '#FFA000' 
     ];
 
-    // 顏色狀態管理
-    let subjectColorMap = {}; // 記錄 科目 -> 顏色
-    let groupColorMap = {};   // 記錄 組別 -> 顏色
-    let subjectColorIndex = 0; // 下一個可用顏色的索引
+    let subjectColorMap = {}; 
+    let groupColorMap = {};   
+    let subjectColorIndex = 0; 
     let groupColorIndex = 0;
 
-    // --- 安全性強化：HTML 跳脫函式 ---
     function escapeHtml(text) {
         if (!text) return '';
         return text
@@ -408,7 +396,6 @@
             .replace(/'/g, "&#039;");
     }
 
-    // --- 自訂模態對話框邏輯 (取代 confirm/alert) ---
     let confirmCallback = null;
 
     function showModal(message, isConfirm = false, callback = null) {
@@ -417,18 +404,16 @@
         const cancelBtn = document.getElementById('modalCancelBtn');
         
         if (isConfirm) {
-            // 確認模式 (類似 confirm)
             cancelBtn.style.display = 'inline-block';
             confirmBtn.innerText = '確定';
             confirmBtn.classList.remove('btn-theme'); 
-            confirmBtn.classList.add('btn-clear'); // 紅色
+            confirmBtn.classList.add('btn-clear');
             confirmCallback = callback;
         } else {
-            // 提示模式 (類似 alert)
             cancelBtn.style.display = 'none';
             confirmBtn.innerText = '關閉';
             confirmBtn.classList.remove('btn-clear');
-            confirmBtn.classList.add('btn-theme'); // 灰色
+            confirmBtn.classList.add('btn-theme');
             confirmCallback = null;
         }
         
@@ -445,7 +430,6 @@
         closeModal();
     }
 
-    // --- 顏色分配 ---
     function getSubjectColor(subject) {
         if (!subject) return '#2c3e50';
         if (!subjectColorMap[subject]) {
@@ -481,19 +465,18 @@
 
             const clean = (idx) => cells[idx] ? cells[idx].innerText.replace(/\s+/g, '').trim() : '';
             
-            // 根據日期的位置來判斷是哪種課表格式
             const c11 = clean(11);
             const c12 = clean(12);
 
             let format = 'unknown';
             if (['一', '二', '三', '四', '五', '六', '日'].includes(c11) && c11.length === 1) {
-                format = 'class';   // 班級課表
+                format = 'class';   
             } else if (['一', '二', '三', '四', '五', '六', '日'].includes(c12) && c12.length === 1) {
-                format = 'teacher'; // 教師課表
+                format = 'teacher'; 
             }
 
             if (format === 'unknown') return;
-            detectedFormat = format; // 儲存成功辨識的格式狀態
+            detectedFormat = format;
 
             let subject, group, required, note, teacher, classroom, dayStr, periodStr, week, courseClass = '';
 
@@ -512,7 +495,7 @@
                 group = clean(6);
                 required = clean(8);
                 teacher = clean(1);
-                courseClass = clean(2); // 教師課表獨有: 開課班級
+                courseClass = clean(2);
                 dayStr = clean(12);
                 periodStr = clean(13);
                 week = clean(14);
@@ -522,7 +505,6 @@
 
             if (!periodStr || !dayStr) return;
 
-            // 處理跨行合併或同一課程連堂導致特定欄位留白的狀況
             if (subject) {
                 prevSubject = subject;
                 prevGroup = group;
@@ -586,7 +568,6 @@
         }
     }
 
-    // --- 拖曳功能相關變數 ---
     let draggedCourseId = null;
 
     // --- 3. 渲染課表 ---
@@ -594,21 +575,17 @@
         const table = document.getElementById('scheduleGrid');
         table.innerHTML = '';
 
-        // --- 智慧隱藏邏輯 ---
-        // 1. 星期：平日(一~五)必顯，假日(六、日)有課才顯
         const activeDays = new Set(courses.map(c => c.day));
         const displayDays = allDays.filter(d => {
             return ['一', '二', '三', '四', '五'].includes(d) || activeDays.has(d);
         });
 
-        // 2. 節次：日間(1~9)必顯，夜間(A~D)有課才顯 (逐列檢查)
         const activePeriods = new Set(courses.map(c => c.period));
         const displayPeriods = allPeriods.filter(p => {
             const isNight = ['A', 'B', 'C', 'D'].includes(p.id);
             return !isNight || activePeriods.has(p.id);
         });
 
-        // 3.1 建立表頭
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
         headerRow.innerHTML = '<th class="col-period">節次</th>';
@@ -618,7 +595,6 @@
         thead.appendChild(headerRow);
         table.appendChild(thead);
 
-        // 3.2 建立表格內容
         const tbody = document.createElement('tbody');
         
         displayPeriods.forEach(p => {
@@ -627,11 +603,9 @@
 
             displayDays.forEach(d => {
                 const td = document.createElement('td');
-                // 加入資料屬性與拖曳事件
                 td.dataset.day = d;
                 td.dataset.period = p.id;
                 
-                // 允許放置
                 td.ondragover = handleDragOver;
                 td.ondragleave = handleDragLeave;
                 td.ondrop = handleDrop;
@@ -642,7 +616,7 @@
                     matches.forEach(m => {
                         const div = document.createElement('div');
                         div.className = 'course-card';
-                        div.draggable = true; // 開啟拖曳
+                        div.draggable = true; 
                         div.ondragstart = (e) => handleDragStart(e, m.id);
                         
                         const subjectColor = getSubjectColor(m.subject); 
@@ -650,9 +624,7 @@
                         
                         div.style.borderLeftColor = subjectColor;
 
-                        // 產生標籤 HTML (套用 escapeHtml 安全處理)
                         let tags = '';
-                        // 如果有班級資訊(通常為教師課表匯入)，顯示班級標籤
                         if (m.courseClass) {
                             tags += `<span class="tag tag-class">${escapeHtml(m.courseClass)}</span>`;
                         }
@@ -666,7 +638,6 @@
                             tags += `<span class="tag tag-week">${escapeHtml(m.week)}</span>`;
                         }
 
-                        // 套用 escapeHtml 安全處理，防止 XSS
                         div.innerHTML = `
                             <span class="delete-btn" onclick="removeCourse('${m.id}')" title="刪除此課程">×</span>
                             
@@ -680,7 +651,6 @@
                                 <span>${escapeHtml(m.classroom || '')}</span>
                             </div>
                         `;
-                        // title 屬性也需要安全處理
                         div.title = escapeHtml(m.info); 
                         td.appendChild(div);
                     });
@@ -692,7 +662,6 @@
         table.appendChild(tbody);
     }
 
-    // --- 拖曳事件處理 ---
     function handleDragStart(e, id) {
         draggedCourseId = id;
         e.dataTransfer.effectAllowed = 'move';
@@ -700,9 +669,7 @@
     }
 
     function handleDragOver(e) {
-        if (e.preventDefault) {
-            e.preventDefault(); 
-        }
+        if (e.preventDefault) e.preventDefault(); 
         e.dataTransfer.dropEffect = 'move';
         
         const td = e.target.closest('td');
@@ -714,15 +681,11 @@
 
     function handleDragLeave(e) {
         const td = e.target.closest('td');
-        if (td) {
-            td.classList.remove('drag-over');
-        }
+        if (td) td.classList.remove('drag-over');
     }
 
     function handleDrop(e) {
-        if (e.stopPropagation) {
-            e.stopPropagation();
-        }
+        if (e.stopPropagation) e.stopPropagation();
         
         const td = e.target.closest('td');
         document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
@@ -744,17 +707,16 @@
         return false;
     }
 
-
     function removeCourse(id) {
         if(event) event.stopPropagation(); 
         courses = courses.filter(c => c.id !== id);
         renderSchedule();
     }
 
-    // --- 4. 生成 PDF (取代被 Google Sites 阻擋的 window.print) ---
+    // --- 4. 生成 PDF (含截圖前取消高度限制修復) ---
     async function generatePDF() {
         if (courses.length === 0) {
-            showModal("目前沒有課表資料。"); // 改用自訂視窗
+            showModal("目前沒有課表資料。"); 
             return;
         }
         
@@ -767,6 +729,12 @@
         const originalText = btn.innerText;
         btn.innerText = "⏳ 產生中...";
         
+        // 為了讓 html2canvas 能擷取完整表格，暫時關閉容器的滾動和高度限制
+        const originalMaxHeight = element.style.maxHeight;
+        const originalOverflow = element.style.overflow;
+        element.style.maxHeight = 'none';
+        element.style.overflow = 'visible';
+
         try {
             const canvas = await html2canvas(element, {
                 scale: 2, 
@@ -793,17 +761,21 @@
             
         } catch (error) {
             console.error("PDF generation failed:", error);
-            showModal("PDF 產生失敗，請稍後再試。"); // 改用自訂視窗
+            showModal("PDF 產生失敗，請稍後再試。");
         } finally {
+            // 恢復滾動容器的設定
+            element.style.maxHeight = originalMaxHeight;
+            element.style.overflow = originalOverflow;
+
             deleteBtns.forEach(btn => btn.style.display = '');
             btn.innerText = originalText;
         }
     }
 
-    // --- 5. 匯出 Excel (使用 ExcelJS) ---
+    // --- 5. 匯出 Excel ---
     async function exportToExcel() {
         if (courses.length === 0) {
-            showModal("目前沒有課表資料，無法匯出。"); // 改用自訂視窗
+            showModal("目前沒有課表資料，無法匯出。"); 
             return;
         }
 
@@ -819,7 +791,6 @@
             }
         });
 
-        // 智慧隱藏邏輯 (匯出時也要套用)
         const activeDays = new Set(courses.map(c => c.day));
         const displayDays = allDays.filter(d => {
             return ['一', '二', '三', '四', '五'].includes(d) || activeDays.has(d);
@@ -831,7 +802,6 @@
             return !isNight || activePeriods.has(p.id);
         });
 
-        // 設定欄位
         const columns = [
             { header: '節次', key: 'period', width: 8 },
             ...displayDays.map(d => ({ header: d, key: d, width: 22 }))
@@ -867,7 +837,7 @@
                 if (matches.length > 0) {
                     const contentParts = matches.map(m => {
                         let line1 = m.subject;
-                        if(m.courseClass) line1 += ` [${m.courseClass}]`; // Excel 同步顯示班級
+                        if(m.courseClass) line1 += ` [${m.courseClass}]`; 
                         if(m.group) line1 += ` (${m.group})`;
                         if(m.week) line1 += ` (${m.week})`;
                         const line2 = `${m.teacher || ''} ${m.classroom || ''}`;
@@ -905,11 +875,9 @@
         document.getElementById('hiddenInput').focus();
     });
 
-    // --- 修改後的清除功能 (呼叫自訂視窗) ---
     function clearData() {
         showModal('確定要清除所有課表資料嗎？', true, () => {
             courses = [];
-            // 重置顏色狀態
             subjectColorMap = {};
             groupColorMap = {};
             subjectColorIndex = 0;
