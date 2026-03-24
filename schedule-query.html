@@ -81,9 +81,19 @@
             </header>
 
             <div class="sticky -top-6 z-30 flex justify-center items-center gap-2 text-lg text-blue-700 font-medium flex-wrap bg-white/95 backdrop-blur-md p-3 rounded-xl border border-blue-100 shadow-md">
-                <div class="flex items-center px-2 py-1">
-                    <input type="number" id="ui-year" class="w-16 bg-transparent text-center font-bold focus:outline-none border-b-2 border-blue-300 focus:border-blue-600 transition-colors" value="111">
-                    <span class="ml-1 text-gray-600">學年度</span>
+                <div class="flex items-center px-1 py-1 gap-1">
+                    <button type="button" onclick="changeYear(-1)" class="w-8 h-8 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 active:scale-90 transition-all border border-blue-100 shadow-sm" title="減一年">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                        </svg>
+                    </button>
+                    <input type="number" id="ui-year" class="w-12 bg-transparent text-center font-extrabold text-blue-700 focus:outline-none border-b-2 border-blue-300 focus:border-blue-600 transition-colors" value="111">
+                    <button type="button" onclick="changeYear(1)" class="w-8 h-8 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 active:scale-90 transition-all border border-blue-100 shadow-sm" title="加一年">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                    <span class="ml-1 text-gray-600 text-sm font-medium whitespace-nowrap">學年度</span>
                 </div>
                 
                 <span class="text-gray-300">|</span>
@@ -382,6 +392,11 @@
         function updateHiddenForms() {
             document.querySelectorAll('.input-syear').forEach(el => el.value = uiYearInput.value);
             document.querySelectorAll('.input-smester').forEach(el => el.value = uiSemesterSelect.value);
+        }
+
+        function changeYear(delta) {
+            uiYearInput.value = parseInt(uiYearInput.value) + delta;
+            updateHiddenForms();
         }
 
         uiYearInput.addEventListener('change', updateHiddenForms);
